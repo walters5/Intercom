@@ -1,0 +1,19 @@
+#include "mbed.h"
+ 
+SPI device(SPI_MOSI, SPI_MISO, SPI_SCK);
+DigitalOut CS(SPI_CS);
+int main() {
+    CS = 1;
+    //Set bits and frequency.
+    device.format (16,0);
+    device.frequency(1000000);
+    while(1) {
+        CS = 0;
+        device.write(0x1234);
+     // Send a dummy byte
+    int dummy = device.write(0x00);
+    
+        CS = 1;       
+        wait_us(50);
+    }
+}
