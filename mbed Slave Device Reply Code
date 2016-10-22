@@ -1,0 +1,15 @@
+#include "mbed.h"
+
+SPISlave device(SPI_MOSI, SPI_MISO, SPI_SCK, SPI_CS); // mosi, miso, sclk, ssel
+
+int main() {
+     device.format(16,0);
+     device.reply(0x00);              // Prime SPI with first reply
+     while(1) {
+         if(device.receive()) {
+             int v = device.read();   // Read byte from master
+             v = 0x00FF;
+             device.reply(v);         // Make this the next reply
+         }
+     }
+ }
