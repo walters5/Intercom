@@ -1,0 +1,62 @@
+10/6/16: 12:00PM - 1:30PM
+  Brainstorm Design and Component Choices
+  Microphone selection
+  Must, Should, May
+    Must: 2 Intercoms, Push-to-Talk, Volume Control, Microphone, Speaker
+    Should: Multiple Intercoms unit
+    May: Wireless, LCD Display Screen
+ TO-DO:
+    Team Member Availability
+    4 Ideas into Information Paragraphs
+
+10/11/16: Start Time: 12:00PM - 1:15PM
+  Audio codec
+  SPI- allows accessing 
+  DAC
+  ADC
+  Cat-5 or 6 Cable
+  Base tentative budget $30 per person
+ TO-DO:
+  Decide microprocessor
+    http://www.digikey.com/product-detail/en/stmicroelectronics/STM32F030R8T6/497-14045-ND/4357253 
+      55 I/O’s
+      High enough clock frequency 48MHz
+      Cheap
+      32-bit core size
+    http://www.digikey.com/product-detail/en/stmicroelectronics/STM32L053R8T6D/STM32L053R8T6D-ND/5308084 
+      51 I/O’s
+      High enough clock frequency 32MHz
+      Cheap
+      32-bit core size
+  Research types of audio codec
+    Decide Audio Codec
+  Standard packet size  
+  Initial cost
+  Find out where mentor graphics is accessible
+
+10/15/16: Start Time: 9:00 AM - 12:45PM
+  Using STM32L053R8T6 microcontroller
+  Using NAU8811, MAX9860 Audio Codec
+  Using MBED Toolchain
+  Talked about timing, frequency and data transfer rates needed
+    8 MHz Internal RC Clock
+    16 kHz Sampling Rate
+    24 Bits
+  Processor: i2C 256 x Sampling Rate
+  Using ORCad for Schematic Capture
+
+10/20/16: Start Time: 12:00PM - 1:30PM
+  Using MBED.COM Online IDE and Noah’s Macbook, we successfully programmed the STM32 on the Nucleo Board to blink LED2 in 1 second intervals.
+    Using the Online IDE, we also wrote data on SCI, but were unable to confirm the data was accurate.
+    Audio codec changed. Using more expandable codec that will allow for ease of wireless transition.
+  OrCad Schematic Layout and KiCad use confirmation.
+ TO-DO:
+    Tyler is ordering the audio codec, a speaker, and a microphone. He will be putting them down on a board so that we can easily interface the Nucleo boards with the audio components and continue testing.
+
+10/22/16: Start Time: 07:00AM - 2:00PM
+  Wrote C code to enable button use in conjunction with blinking an LED.
+  Wrote C code to send data via SPI. Measured transmitted and clock signals on an oscilloscope.
+  Tried to receive and respond to sent data via STM32, but were unable to get it to read the data.
+ TO-DO:
+  Determine the reason why the controller is not receiving or reading the data.
+  Get the two controllers to talk to each other.
