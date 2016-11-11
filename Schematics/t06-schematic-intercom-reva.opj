@@ -22,7 +22,13 @@
     (OTHER_Switch4 "FALSE")
     (OTHER_Switch5 "FALSE")
     (OTHER_Switch6 "FALSE")
-    (NoModify))
+    (NoModify)
+    (ANNOTATE_Scope "0")
+    (ANNOTATE_Mode "1")
+    (ANNOTATE_Action "0")
+    (ANNOTATE_Reset_References_to_1 "FALSE")
+    (ANNOTATE_No_Page_Number_Change "FALSE")
+    (ANNOTATE_Property_Combine "{Value}{Source Package}"))
   (Folder "Outputs")
   (Folder "Referenced Projects")
   (PartMRUSelector)
@@ -30,7 +36,8 @@
     (FileView
       (Path "Design Resources")
       (Path "Design Resources" ".\t06-schematic-intercom-reva.dsn")
-      (Path "Design Resources" ".\t06-schematic-intercom-reva.dsn" "Intercom"))
+      (Path "Design Resources" ".\t06-schematic-intercom-reva.dsn" "Intercom")
+      (Select "Design Resources" ".\t06-schematic-intercom-reva.dsn"))
     (HierarchyView)
     (Doc
       (Type "COrCapturePMDoc")
@@ -40,19 +47,8 @@
     (Doc
       (Type "COrSchematicDoc")
       (Frame
-        (Placement "44 0 1 -1 -1 -1 -1 50 1616 50 761")
-        (Scroll "0 0")
-        (Zoom "100")
-        (Occurrence "/"))
-      (Path
-         "C:\SEITZ\SCHOOL\INTERCOM\GITHUB\INTERCOM\SCHEMATICS\T06-SCHEMATIC-INTERCOM-REVA.DSN")
-      (Schematic "Intercom")
-      (Page "2.) POWER & CONNECTORS"))
-    (Doc
-      (Type "COrSchematicDoc")
-      (Frame
         (Placement "44 0 1 -1 -1 -1 -1 125 1691 125 836")
-        (Scroll "0 319")
+        (Scroll "0 299")
         (Zoom "100")
         (Occurrence "/"))
       (Path
