@@ -1,19 +1,157 @@
+// Intercom Master Unit
 #include "mbed.h"
- 
-SPI device(SPI_MOSI, SPI_MISO, SPI_SCK);
-DigitalOut CS(SPI_CS);
-int main() {
-    CS = 1;
-    //Set bits and frequency.
-    device.format (16,0);
-    device.frequency(1000000);
+SPI SPI_Bridge(PA_7, PA_6, PA_5, PA_4); // SPI1 MOSI, MISO, SCLK, NSS
+SPISlave codec(PB_15, PB_14, PB_13, PB_12); //SPI2 MOSI, MISO, SCLK, NSS
+DigitalOut cs1(PA_4); // SPI1 CHIP SELECT TO SLAVE DEVICE
+DigitalOut codec_resetn(PB_10);
+AnalogIn volume(PC_0);
+DigitalOut myled(PB_6); // ENABLES USE OF THE ON-BOARD LED
+
+// CONFIGURES MCO1 AS AN OUTPUT ON PIN PA_8, FIND HAL_RCC.C FILE LINE 961
+void HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv);
+// AUDIO CODEC INITIALIZATION FUNCTION DECLARATION
+void codec_initial();
+// INTERCOM VOLUME CONTROL FUNCTION DECLARATION
+//void volume_control();
+static void MX_ADC_Init(void);
+//void SystemClock_Config(void);
+
+float vol_current;
+
+DigitalOut Buffer_ENn(PA_15);
+
+DigitalIn USRBTN_0(PC_1,PullUp);
+DigitalIn USRBTN_1(PC_2,PullUp);
+DigitalIn USRBTN_2(PC_3,PullUp);
+DigitalIn USRBTN_3(PC_4,PullUp);
+DigitalIn USRBTN_4(PC_5,PullUp);
+DigitalIn USRBTN_5(PC_6,PullUp);
+DigitalOut USRLED_0(PC_7);
+DigitalOut USRLED_1(PC_8);
+DigitalOut USRLED_2(PC_9);
+DigitalOut USRLED_3(PC_10);
+DigitalOut USRLED_4(PC_11);
+DigitalOut USRLED_5(PC_12);
+
+DigitalIn DIPSWn0(PB_0,PullUp);
+DigitalIn DIPSWn1(PB_1,PullUp);
+DigitalIn DIPSWn2(PB_2,PullUp);
+DigitalIn DIPSWn3(PB_3,PullUp);
+DigitalIn DIPSWn4(PB_4,PullUp);
+DigitalIn DIPSWn5(PB_5,PullUp);
+
+DigitalOut TX_EN(PA_8);
+
+void main()
+{
+    USRLED_0 = 0;
+    USRLED_1 = 0;
+    USRLED_2 = 0;
+    USRLED_3 = 0;
+    USRLED_4 = 0;
+    USRLED_5 = 0;
+
+    uint32_t RCC_MCOx = RCC_MCO2; // SET MCO TO MCO1 OUTPUT
+    uint32_t RCC_MCOSource = RCC_MCO1SOURCE_SYSCLK; // SET MCO SOURCE TO HSE
+    uint32_t RCC_MCODiv = RCC_MCODIV_2; // SET MCO OUTPUT FREQ DIVIDED BY 1
+    //__HAL_RCC_HSE_CONFIG(RCC_HSE_ON);
+    RCC_OscInitTypeDef RCC_OscInitStruct;
+    RCC_ClkInitTypeDef RCC_ClkInitStruct;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLLMUL_4;
+    RCC_OscInitStruct.PLL.PLLDIV = RCC_PLLDIV_2;
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                                  |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    HAL_RCC_MCOConfig(RCC_MCOx, RCC_MCOSource, RCC_MCODiv);
+    HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+    // SENDS CONFIG BACK TO FUNCTION
+    //void SystemClock_Config();
+    SPI_Bridge.format(16,0); // FORMATS SPI1 FOR 16-BIT DATA TRANSMISSION IN MODE 0
+    SPI_Bridge.frequency(8000000); // SETS SPI1 FREQUENCY TO 8MHZ
+    codec.format(16,0); // FORMATS SPI2 FOR 16-BIT DATA TRANSMISSION IN MODE 0
+    codec.frequency(2000000); // SETS SPI1 FREQUENCY TO 8MHZ
+    codec_initial(); // INITIALIZE CODEC FUNCTION
+    //vol_current = volume.read();
+    short audio_mask_no_cfg = 0xFFFE; // NUMBER TO MASK PRIMARY FRAME DATA.
+    //  short audio_mask_yes_cfg = 0x0001; //BIT WISE OR WITH AUDIO TO TRIGGER CFG.
+    //  short audio; // VARIABLE TO SAVE MASKED PRIMARY FRAME
+    short RX_audio = 0x0000;
+    short TX_audio = 0x0000;
+    short local_audio = 0x0000;
+    // short DAC_gain = 0x0001;
+    // short ADC_gain = 0x0001;
+    // int i = 0;
+    TX_EN = 1; //Enable Single Ended to Differential Driver, if 0, Rx mode.
+    Buffer_ENn = 0; //turn on bus buffer.
+    wait_ms(10);
+    USRLED_0 = 1;
+    wait_ms(100);
+    USRLED_1 = 1;
+    wait_ms(100);
+    USRLED_2 = 1;
+    wait_ms(100);
+    USRLED_0 = 0;
+    wait_ms(100);
+    USRLED_1 = 0;
+    wait_ms(100);
+    USRLED_2 = 0;
+    wait_ms(100);
+
     while(1) {
-        CS = 0;
-        device.write(0x1234);
-     // Send a dummy byte
-    int dummy = device.write(0x00);
-    
-        CS = 1;       
-        wait_us(50);
+
+
+        if(USRBTN_0 == 0) { //when button is pushed:
+            local_audio = codec.read();   // Read byte from codec
+            TX_audio = local_audio & audio_mask_no_cfg; //MASKING OF SECONDARY FRAME FLAG
+            cs1 = 0;
+            SPI_Bridge.write(TX_audio);
+            cs1 = 1;
+            USRLED_0 = 1;
+        } else {
+            USRLED_0 = 0;
+            cs1 = 0;
+            RX_audio = SPI_Bridge.write(0x0102);
+            cs1 = 1;
+            RX_audio = RX_audio & audio_mask_no_cfg;
+            codec.reply(RX_audio);
+        }
+
+        USRLED_3 = 1;
+        USRLED_3 = 0;
     }
+}
+
+void codec_initial()
+{
+    codec_resetn = 0;
+    wait_us(20);
+    codec_resetn = 1;
+    wait_us(20);
+    codec.reply(0x0001); // SEND PRIMARY FRAME TO TRIP CODEC SECONDARY FLAG
+    codec.reply(0x0180); // CONFIGURE CODEC CONTROL REGISTER 1 FOR SOFT RESET
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0110); // CONFIGURE CODEC CONTROL REGISTER 1 FOR SPEAKERS
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0200); // CONFIGURE CODEC CONTROL REGISTER 2
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0318); // CONFIGURE PLL1 DIVIDE N1 REGISTER 3
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x043F); // CONFIGURE PLL1 MULTIPLY M1 REGISTER 4
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0562); // SETS RX GAIN CONTROL REGISTER 5, was 62
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x065C); // SETS ADC VOLUME CONTROL REGISTER 6 was 5C
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x075F); // SETS DAC VOLUME CONTROL REGISTER 7, 77F max
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0800); // SETS STATUS REPORT REGISTER 8
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0900); // SETS ANALOG ATTENUATION REGISTER 9
+    codec.reply(0x0000); // LOADS REPLY BUFFER TO PREVENT DUPLICATION
+    USRLED_4 = 1;
 }

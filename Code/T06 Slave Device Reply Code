@@ -1,15 +1,299 @@
+// Intercom Slave Device.
 #include "mbed.h"
+SPISlave ethernet(PA_7, PA_6, PA_5, PA_4); // SPI1 MOSI, MISO, SCLK, NSS
+SPISlave codec(PB_15, PB_14, PB_13, PB_12); //SPI2 MOSI, MISO, SCLK, NSS
+DigitalIn cs1(PA_4);
+DigitalOut codec_resetn(PB_10);
+DigitalOut Buffer_ENn(PA_15);
+AnalogIn volume(PC_0);
 
-SPISlave device(SPI_MOSI, SPI_MISO, SPI_SCK, SPI_CS); // mosi, miso, sclk, ssel
+// CONFIGURES MCO2 AS AN OUTPUT ON PIN PA_9, FIND HAL_RCC.C FILE LINE 961
+void HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv);
+// AUDIO CODEC INITIALIZATION FUNCTION DECLARATION
+void codec_initial();
+// INTERCOM VOLUME CONTROL FUNCTION DECLARATION
+void volume_control();
+float volume_current = 1;
+// MU-LAW FUNCTION DECLARATIONS
+char pcm2ulaw(int RX_audio8);
+int ulaw2pcm(char RX_audio8);
 
-int main() {
-     device.format(16,0);
-     device.reply(0x00);              // Prime SPI with first reply
-     while(1) {
-         if(device.receive()) {
-             int v = device.read();   // Read byte from master
-             v = 0x00FF;
-             device.reply(v);         // Make this the next reply
-         }
-     }
- }
+DigitalIn USRBTN_0(PC_1,PullUp);
+DigitalIn USRBTN_1(PC_2,PullUp);
+DigitalIn USRBTN_2(PC_3,PullUp);
+DigitalIn USRBTN_3(PC_4,PullUp);
+DigitalIn USRBTN_4(PC_5,PullUp);
+DigitalIn USRBTN_5(PC_6,PullUp);
+DigitalOut USRLED_0(PC_7);
+DigitalOut USRLED_1(PC_8);
+DigitalOut USRLED_2(PC_9);
+DigitalOut USRLED_3(PC_10);
+DigitalOut USRLED_4(PC_11);
+DigitalOut USRLED_5(PC_12);
+
+DigitalIn DIPSWn0(PB_0,PullUp);
+DigitalIn DIPSWn1(PB_1,PullUp);
+DigitalIn DIPSWn2(PB_2,PullUp);
+DigitalIn DIPSWn3(PB_3,PullUp);
+DigitalIn DIPSWn4(PB_4,PullUp);
+DigitalIn DIPSWn5(PB_5,PullUp);
+
+DigitalOut TX_EN(PA_8);
+
+short audio_mask_no_cfg = 0xFFFE;
+short audio_mask_yes_cfg = 0x0001; // NUMBER TO MASK PRIMARY FRAME DATA
+int firstrun = 1;
+int main()
+{
+    short RX_audio16; //int
+    short RX_audio8; //char
+    short RX_audio;  //char
+    short TX_audio16; //int
+    short TX_audio8;  //int
+    short TX_audio;   //int
+    short RX_data;    //int
+
+    USRLED_1 = 0;
+    USRLED_2 = 0;
+    USRLED_3 = 0;
+    USRLED_4 = 0;
+    USRLED_5 = 0;
+    USRLED_5 = 0;
+
+    uint32_t RCC_MCOx = RCC_MCO2; // SET MCO TO MCO1 OUTPUT
+    uint32_t RCC_MCOSource = RCC_MCO1SOURCE_SYSCLK; // SET MCO SOURCE TO HSE
+    uint32_t RCC_MCODiv = RCC_MCODIV_2; // SET MCO OUTPUT FREQ DIVIDED BY 1
+    //__HAL_RCC_HSE_CONFIG(RCC_HSE_ON);
+    RCC_OscInitTypeDef RCC_OscInitStruct;
+    RCC_ClkInitTypeDef RCC_ClkInitStruct;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLLMUL_4;
+    RCC_OscInitStruct.PLL.PLLDIV = RCC_PLLDIV_2;
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                                  |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    HAL_RCC_MCOConfig(RCC_MCOx, RCC_MCOSource, RCC_MCODiv);
+    HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+    ethernet.format(16,0); // FORMATS SPI1 FOR 16-BIT DATA TRANSMISSION IN MODE 0
+    ethernet.frequency(8000000); // SETS SPI1 FREQUENCY TO 8MHZ
+    codec.format(16,0); // FORMATS SPI2 FOR 16-BIT DATA TRANSMISSION IN MODE 0
+    codec.frequency(2000000); // SETS SPI1 FREQUENCY TO 8MHZ
+    codec_initial();
+    TX_EN = 0; //Enable Single Ended to Differential Driver, if 0, Rx mode.
+    Buffer_ENn = 0; // Turn on SPI BUS BUFFER.
+
+//FANCY LED STARTUP:
+    wait_ms(50); //Forces offset in Slave to Master on startup.
+    USRLED_1 = 1;
+    wait_ms(100);
+    USRLED_2 = 1;
+    wait_ms(100);
+    USRLED_3 = 1;
+    wait_ms(100);
+    USRLED_1 = 0;
+    wait_ms(100);
+    USRLED_2 = 0;
+    wait_ms(100);
+    USRLED_3 = 0;
+    wait_ms(100);
+
+
+    while(1) {
+
+        USRLED_5 = 1;
+        USRLED_5 = 0;
+        //First run wait for the master to send a NSS signal, then call the codecinit.
+       //This allows us to set where the audio codec frame clk lands relative to the
+        //master unit. So we wont drop any packets.
+while(firstrun == 1) {
+        if(firstrun == 1 && cs1 == 0) { //This wont gaurantee we don't jump on this too late.
+            codec_initial(); // INITIALIZE CODEC FUNCTION
+            firstrun = 0;
+            USRLED_5 = 1;
+            //break;
+            }
+            else {
+                USRLED_5 != USRLED_5;
+            }
+            }
+        
+        //USRLED_5 = 1;
+
+        if(USRBTN_0 == 0) { // BUTTON PRESSED
+            codec.reply(0x0000);
+            TX_audio16 = codec.read();
+            //TX_audio8 = pcm2ulaw(TX_audio16);
+            //TX_audio = TX_audio8 + 0x0000;
+            TX_audio16 = TX_audio16 & audio_mask_no_cfg;
+            ethernet.reply(TX_audio16); // was TX_audio
+            //volume_control();
+            USRLED_0 = 1;
+        } else { // BUTTON NOT PRESSED
+            RX_data = ethernet.read();
+            //RX_audio8 = RX_data & 0x00FF;
+            //RX_audio16 = ulaw2pcm(RX_audio8);
+            RX_data = RX_data & audio_mask_no_cfg; // MASKING OF SECONDARY FRAME FLAG
+            codec.reply(RX_data); // was RX_audio
+            //volume_control();
+            USRLED_0 = 0;
+        }
+
+        //}
+    }
+}
+
+void codec_initial()
+{
+    codec_resetn = 0;
+    wait_us(6);
+    codec_resetn = 1;
+    wait_us(6);
+    USRLED_4 = 0;
+    codec.reply(0x0001); // SEND PRIMARY FRAME TO TRIP CODEC SECONDARY FLAG
+    codec.reply(0x0180); // CONFIGURE CODEC CONTROL REGISTER 1 FOR SOFT RESET
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0110); // CONFIGURE CODEC CONTROL REGISTER 1 FOR SPEAKERS
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0200); // CONFIGURE CODEC CONTROL REGISTER 2
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0318); // CONFIGURE PLL1 DIVIDE N1 REGISTER 3 8kHz/16MHz
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x043F); // CONFIGURE PLL1 MULTIPLY M1 REGISTER 4 8kHz/16MHz
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x057A); // SETS RX GAIN CONTROL REGISTER 5, was 62
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x067C); // SETS ADC VOLUME CONTROL REGISTER 6 was 5C
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x075F); // SETS DAC VOLUME CONTROL REGISTER 7
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0800); // SETS STATUS REPORT REGISTER 8
+    codec.reply(0x0001); // TRIP CODEC FLAG
+    codec.reply(0x0900); // SETS ANALOG ATTENUATION REGISTER 9
+    codec.reply(0x0000); // LOADS REPLY BUFFER TO PREVENT DUPLICATION
+    USRLED_4 = 1;
+}
+
+// AUDIO CODEC DAC VOLUME CONTROL FUNCTION
+void volume_control()
+{
+    volume_current = volume.read();
+    if (1 >= volume_current > 0.97) {
+        codec.reply(0x077F);
+        USRLED_2 = 1;
+    } else if(0.97 >= volume_current > 0.94) {
+        codec.reply(0x077B);
+        USRLED_2 = 1;
+    } else if(0.94 >= volume_current > 0.91) {
+        codec.reply(0x0777);
+        USRLED_2 = 1;
+    } else if(0.91 >= volume_current > 0.88) {
+        codec.reply(0x0773);
+    } else if(0.88 >= volume_current > 0.84) {
+        codec.reply(0x076F);
+    } else if(0.84 >= volume_current > 0.81) {
+        codec.reply(0x076B);
+    } else if(0.81 >= volume_current > 0.78) {
+        codec.reply(0x0767);
+    } else if(0.78 >= volume_current > 0.75) {
+        codec.reply(0x0763);
+    } else if(0.75 >= volume_current > 0.72) {
+        codec.reply(0x075F);
+    } else if(0.72 >= volume_current > 0.69) {
+        codec.reply(0x075B);
+    } else if(0.69 >= volume_current > 0.66) {
+        codec.reply(0x0757);
+    } else if(0.66 >= volume_current > 0.63) {
+        codec.reply(0x0753);
+    } else if(0.63 >= volume_current > 0.59) {
+        codec.reply(0x074F);
+    } else if(0.59 >= volume_current > 0.56) {
+        codec.reply(0x074B);
+    } else if(0.56 >= volume_current > 0.53) {
+        codec.reply(0x0747);
+    } else if(0.53 >= volume_current > 0.50) {
+        codec.reply(0x0743);
+    } else if(0.50 >= volume_current > 0.47) {
+        codec.reply(0x073F);
+    } else if(0.47 >= volume_current > 0.44) {
+        codec.reply(0x073B);
+    } else if(0.44 >= volume_current > 0.41) {
+        codec.reply(0x0737);
+    } else if(0.41 >= volume_current > 0.38) {
+        codec.reply(0x0733);
+    } else if(0.38 >= volume_current > 0.34) {
+        codec.reply(0x072F);
+    } else if(0.34 >= volume_current > 0.31) {
+        codec.reply(0x072B);
+    } else if(0.31 >= volume_current > 0.28) {
+        codec.reply(0x0727);
+    } else if(0.28 >= volume_current > 0.25) {
+        codec.reply(0x0723);
+    } else if(0.25 >= volume_current > 0.22) {
+        codec.reply(0x071F);
+    } else if(0.22 >= volume_current > 0.19) {
+        codec.reply(0x071B);
+    } else if(0.19 >= volume_current > 0.16) {
+        codec.reply(0x0717);
+    } else if(0.16 >= volume_current > 0.13) {
+        codec.reply(0x0713);
+    } else if(0.13 >= volume_current > 0.09) {
+        codec.reply(0x070F);
+    } else if(0.09 >= volume_current > 0.06) {
+        codec.reply(0x070B);
+        USRLED_2 = 0;
+    } else if(0.06 >= volume_current > 0.03) {
+        codec.reply(0x0707);
+        USRLED_2 = 0;
+    } else if(0.03 >= volume_current >= 0.0) {
+        codec.reply(0x0703);
+        USRLED_2 = 0;
+    }
+    volume.read();
+    return;
+}
+
+// unsigned 16(14)bit to signed 8bit
+char pcm2ulaw(int TX_audio16)
+{
+    int num, TX_audio8, seg;
+
+    TX_audio16 = TX_audio16 - 0x7fff;
+    if (TX_audio16 & 0x8000) {
+        num = - TX_audio16;
+    } else {
+        num = TX_audio16;
+    }
+    num = num >> 2;
+
+    num = num + 0x21;
+    if (num >= 0x2000) num = 0x1fff;
+    for (seg = 7; seg >= 0; seg --) {
+        if (num & 0x1000) break;
+        num = num << 1;
+    }
+    TX_audio8 = ((num >> 8) & 0x0f) | (seg << 4);
+
+    if (TX_audio16 & 0x8000) TX_audio8 = TX_audio8 | 0x80;
+    return ~TX_audio8;
+}
+
+// signed 8bit to unsigned 16(14)bit
+int ulaw2pcm(char RX_audio8)
+{
+    int num, RX_audio16, seg;
+
+    num = ~RX_audio8;
+
+    seg = (num >> 4) & 0x07;
+    RX_audio16 = (0x21 | ((num & 0x0f) << 1)) << seg;
+    RX_audio16 = RX_audio16 - 0x21;
+
+    RX_audio16 = RX_audio16 << 2;
+    if (RX_audio8 & 0x80) RX_audio16 = - RX_audio16;
+    RX_audio16 = RX_audio16 + 0x8000;
+    return RX_audio16;
+}
